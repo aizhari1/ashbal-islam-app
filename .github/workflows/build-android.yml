@@ -11,11 +11,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
+    env:
+      ANDROID_HOME: ${{ github.workspace }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup Node
+      - name: Setup Node 24
         uses: actions/setup-node@v5
         with:
           node-version: '24'
@@ -26,21 +30,27 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
+      - name: Install Android SDK (بدون action قديم)
         run: |
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" || true
-          yes | sdkmanager --licenses || true
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
+          unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
-      - name: Install npm deps + assets
+      - name: Install npm + assets
         run: |
           npm install
           npm run generate-assets
           npx expo install expo-asset expo-constants expo-file-system expo-font || true
 
-      - name: Expo prebuild Android
+      - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install --clean
         env:
           CI: true
@@ -55,12 +65,10 @@ jobs:
           NODE_ENV: production
 
       - name: Locate APK
-        id: apk
         run: |
           APK=$(find android -name "*.apk" | grep -E 'release|universal' | head -n 1)
           if [ -z "$APK" ]; then APK=$(find android -name "*.apk" | head -n 1); fi
-          if [ -z "$APK" ]; then echo "No APK found"; find android -name "*.apk" || true; exit 1; fi
-          echo "path=$APK" >> $GITHUB_OUTPUT
+          if [ -z "$APK" ]; then echo "No APK"; find android -name "*.apk" || true; exit 1; fi
           cp "$APK" ashbal-islam.apk
           ls -lh ashbal-islam.apk
 
