@@ -4,14 +4,12 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
 
 jobs:
   build-apk:
-    name: Build APK
+    name: Build APK (بدون Expo token)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -21,14 +19,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
 
-      - name: Install dependencies
-        run: |
-          npm install
-          npm run generate-assets
-
-      - name: Setup Java
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -37,40 +29,44 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android licenses
+      - name: Install SDK packages
         run: |
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;26.1.10909125" || true
           yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Prebuild native Android project
+      - name: Install npm deps + assets
         run: |
-          npx expo install expo-asset expo-constants expo-file-system
-          npx expo prebuild --platform android --no-install --clean
+          npm install
+          npm run generate-assets
+          npx expo install expo-asset expo-constants expo-file-system expo-font || true
 
-      - name: Build release APK
+      - name: Expo prebuild Android
+        run: npx expo prebuild --platform android --no-install --clean
+        env:
+          CI: true
+          EXPO_NO_TELEMETRY: 1
+
+      - name: Gradle assembleRelease
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease --no-daemon --stacktrace
         env:
           NODE_ENV: production
 
-      - name: Find APK
+      - name: Locate APK
         id: apk
         run: |
-          APK=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          APK=$(find android -name "*.apk" | grep -E 'release|universal' | head -n 1)
+          if [ -z "$APK" ]; then APK=$(find android -name "*.apk" | head -n 1); fi
+          if [ -z "$APK" ]; then echo "No APK found"; find android -name "*.apk"; exit 1; fi
           echo "path=$APK" >> $GITHUB_OUTPUT
-          echo "Found: $APK"
-          ls -lh "$APK"
+          cp "$APK" ashbal-islam.apk
+          ls -lh ashbal-islam.apk
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ashbal-islam-apk
-          path: ${{ steps.apk.outputs.path }}
+          path: ashbal-islam.apk
           retention-days: 30
-
-      - name: Summary
-        run: |
-          echo "### ✅ APK جاهز" >> $GITHUB_STEP_SUMMARY
-          echo "حمّل الملف من تبويب **Artifacts** في صفحة الـ Actions." >> $GITHUB_STEP_SUMMARY
