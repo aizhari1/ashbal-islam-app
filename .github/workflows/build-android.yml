@@ -7,74 +7,48 @@ on:
 
 jobs:
   build-apk:
-    name: Build APK (بدون Expo token)
+    name: Build APK
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
-
-    env:
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+    timeout-minutes: 40
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Setup Node 24
-        uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android SDK (بدون action قديم)
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.2'
+
+      - name: Setup Android SDK
         run: |
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          export ANDROID_HOME=$HOME/android-sdk
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          mkdir -p $ANDROID_HOME/cmdline-tools
           curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdtools.zip
-          unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME/cmdline-tools"
-          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
+          unzip -q /tmp/cmdtools.zip -d $ANDROID_HOME/cmdline-tools
+          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses >/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME \
+            "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
 
-      - name: Install npm + assets
+      - name: Generate icons
         run: |
-          npm install
-          npm run generate-assets
-          npx expo install expo-asset expo-constants expo-file-system expo-font || true
+          pip install pillow -q
+          python3 scripts/make-icons.py
 
-      - name: Expo prebuild
-        run: npx expo prebuild --platform android --no-install --clean
-        env:
-          CI: true
-          EXPO_NO_TELEMETRY: 1
-
-      - name: Gradle assembleRelease
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
-        env:
-          NODE_ENV: production
-
-      - name: Locate APK
-        run: |
-          APK=$(find android -name "*.apk" | grep -E 'release|universal' | head -n 1)
-          if [ -z "$APK" ]; then APK=$(find android -name "*.apk" | head -n 1); fi
-          if [ -z "$APK" ]; then echo "No APK"; find android -name "*.apk" || true; exit 1; fi
-          cp "$APK" ashbal-islam.apk
-          ls -lh ashbal-islam.apk
+      - name: Build release APK
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ashbal-islam-apk
-          path: ashbal-islam.apk
+          path: app/build/outputs/apk/release/*.apk
           retention-days: 30
