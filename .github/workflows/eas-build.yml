@@ -1,31 +1,10 @@
-name: EAS Build (Expo cloud)
+name: EAS Build (disabled)
 
 on:
   workflow_dispatch:
 
 jobs:
-  eas:
-    name: EAS Android APK
+  skip:
     runs-on: ubuntu-latest
-    # يحتاج Secret باسم EXPO_TOKEN من https://expo.dev → Access tokens
-    if: ${{ secrets.EXPO_TOKEN != '' }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-
-      - name: Install
-        run: |
-          npm install
-          npm run generate-assets
-
-      - uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: EAS build APK
-        run: eas build -p android --profile preview --non-interactive --wait
+      - run: echo "استخدم Build Android APK فقط — بدون Expo"
