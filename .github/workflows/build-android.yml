@@ -48,35 +48,29 @@ jobs:
               -dname "CN=AshbalIslam, OU=App, O=Ashbal, L=Cairo, ST=Cairo, C=EG"
           fi
 
-      - name: Generate icons
+      - name: Generate icons from academy logo
         run: |
           pip install pillow -q
           python3 scripts/make-icons.py
           ls -la app/src/main/res/mipmap-hdpi/
-          ls -la app/src/main/res/drawable/
+          file app/src/main/res/mipmap-hdpi/ic_launcher.png
+          file app/src/main/res/drawable/splash_logo.png
 
-      - name: Build signed debug APK (installable)
+      - name: Build signed debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Build signed release APK
-        run: gradle assembleRelease --no-daemon --stacktrace
-
-      - name: Collect APKs
+      - name: Collect APK
         run: |
           mkdir -p dist
           DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
-          RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          echo "DEBUG=$DEBUG_APK"
-          echo "RELEASE=$RELEASE_APK"
-          cp "$DEBUG_APK" dist/ashbal-islam-debug.apk
-          if [ -n "$RELEASE_APK" ]; then cp "$RELEASE_APK" dist/ashbal-islam-release.apk; fi
+          echo "APK=$DEBUG_APK"
+          cp "$DEBUG_APK" dist/ashbal-islam.apk
           ls -lh dist/
-          # verify zip integrity
-          unzip -t dist/ashbal-islam-debug.apk | tail -5
+          unzip -t dist/ashbal-islam.apk | tail -3
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ashbal-islam-apk
-          path: dist/*.apk
+          path: dist/ashbal-islam.apk
           retention-days: 30
